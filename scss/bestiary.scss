@@ -1,4 +1,110 @@
-@import "includes/vars";
+@use "includes/vars";
+
+.mon__ {
+	&wrp-size-type-align--token,
+	&wrp-avoid-token {
+		max-width: calc(100% - 11rem);
+	}
+
+	&wrp-token {
+		display: block;
+		position: absolute;
+		z-index: vars.$z-token-image;
+		top: 0;
+		right: 0.5rem;
+		width: auto;
+		max-width: 11rem;
+		height: auto;
+		transition:
+			opacity vars.$time-2-frames,
+			max-width vars.$time-2-frames,
+			right vars.$time-2-frames;
+
+		&:hover {
+			max-width: 100%;
+			right: 0;
+			opacity: 1 !important;
+			transition:
+				opacity vars.$time-2-frames,
+				max-width vars.$time-2-frames,
+				right vars.$time-2-frames;
+
+			.mon__btn-token-cycle {
+				opacity: 1;
+				transition: opacity vars.$time-2-frames;
+			}
+
+			.mon__wrp-token-footer {
+				opacity: 1;
+				transition: opacity vars.$time-2-frames;
+			}
+		}
+	}
+
+	&token {
+		width: 100%;
+		height: 100%;
+	}
+
+	&btn-token-cycle {
+		position: absolute;
+		top: 50%;
+		bottom: 50%;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 40px;
+		height: 40px;
+		background: vars.$rgb-shadow-grey--dark;
+		cursor: pointer;
+		color: #fff;
+		border: 1px solid vars.$rgb-border-grey--trans;
+		opacity: 0;
+		transition: opacity vars.$time-2-frames;
+
+		&--left {
+			left: 0;
+			border-top-left-radius: 5px;
+			border-bottom-left-radius: 5px;
+			border-right: 1px solid vars.$rgb-border-grey--trans-muted;
+		}
+
+		&--right {
+			right: 0;
+			border-top-right-radius: 5px;
+			border-bottom-right-radius: 5px;
+			border-left: 1px solid vars.$rgb-border-grey--trans-muted;
+		}
+
+		&:hover {
+			color: #ddd;
+		}
+	}
+
+	&wrp-token-footer {
+		display: flex;
+		position: absolute;
+		height: 22px;
+		right: 5px;
+		bottom: 0;
+		left: 5px;
+		align-items: center;
+		justify-content: center;
+		opacity: 0;
+		transition: opacity vars.$time-2-frames;
+	}
+
+	&token-footer {
+		background: vars.$rgb-shadow-grey--dark;
+		color: #fff;
+		font-family: "Times New Roman", serif;
+		font-variant: small-caps;
+		font-size: 16px;
+		border-radius: 5px;
+		padding: 1px 5px;
+		border: 1px solid vars.$rgb-border-grey--trans;
+	}
+}
 
 // region Token
 img.token {
@@ -14,13 +120,15 @@ img.token {
 }
 
 #pagecontent {
-	background-size: 100% auto;
-	background: url("../img/bestiary/stat-block-top-texture.png") no-repeat, repeat top center, $rgb-bg-orange;
+	background:
+		url("../img/bestiary/stat-block-top-texture.webp") no-repeat,
+		repeat top center,
+		vars.$rgb-bg-orange;
 }
 
 .night-mode {
 	#pagecontent {
-		background: $rgb-bg--night !important;
+		background: vars.$rgb-bg--night !important;
 	}
 }
 // endregion
@@ -28,7 +136,7 @@ img.token {
 // region Proficiency dice rollers
 [data-proficiency-dice-mode="dice"] {
 	.rd__dc--rollable {
-		color: $rgb-link-blue;
+		color: vars.$rgb-link-blue;
 		cursor: pointer;
 	}
 
@@ -56,20 +164,24 @@ img.token {
 }
 
 .night-mode [data-proficiency-dice-mode="dice"] .rd__dc--rollable {
-	color: $rgb-link-blue--night;
+	color: vars.$rgb-link-blue--night;
 }
 // endregion
 
 // region Encounter builder
-.ecgen_active .lst__row--bestiary-sublist {
-	cursor: default;
+.best__ {
+	&ecgen-active {
+		.lst__row--bestiary-sublist {
+			cursor: default;
+		}
+
+		.lst__row--bestiary-sublist:hover {
+			background: initial;
+		}
+	}
 }
 
-.ecgen_active .lst__row--bestiary-sublist:hover {
-	background: initial;
-}
-
-.ecgen {
+.best-ecgen {
 	&__ {
 		&visible,
 		&visible--flex,
@@ -77,41 +189,17 @@ img.token {
 			display: none;
 		}
 
-		&btn_list {
+		&btn-list {
 			padding: 0 2px;
 			line-height: 12px;
 			font-size: 9px;
 			border-radius: 3px;
 		}
-
-		&wrp_add_players_btn_wrp {
-			width: calc(140px + 0.5rem);
-		}
-	}
-
-	&-player__ {
-		&wrp-row {
-			&:only-child {
-				.ecgen-player__btn-inline {
-					display: none !important;
-				}
-			}
-		}
-
-		&btn-inline {
-			font-size: 10px;
-		}
 	}
 }
 
-.night-mode .ecgen__ {
-	&wrp {
-		background: $rgb-bg--night;
-	}
-}
-
-.ecgen_active {
-	.ecgen {
+.best__ecgen-active {
+	.best-ecgen {
 		&__visible {
 			display: block;
 		}
@@ -130,11 +218,11 @@ img.token {
 		}
 
 		&__name {
-			width: 26.66666666%;
+			width: 26.6667%;
 		}
 
 		&__name--sub {
-			width: 29.16666667%;
+			width: 29.1667%;
 		}
 	}
 }

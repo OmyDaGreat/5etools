@@ -381,6 +381,7 @@ class RendererMarkdown {
 
 	_renderSpellcasting (entry, textStack, meta, options) {
 		const toRender = this._renderSpellcasting_getEntries(entry);
+		if (!toRender?.[0].entries?.length) return;
 		this._recursiveRender({type: "entries", entries: toRender}, textStack, meta, {prefix: RendererMarkdown._getNextPrefix(options), suffix: "\n"});
 	}
 
@@ -563,6 +564,7 @@ class RendererMarkdown {
 	}
 
 	_renderGallery (entry, textStack, meta, options) {
+		if (entry.name) textStack[0] += `##### ${entry.name}\n`;
 		const len = entry.images.length;
 		for (let i = 0; i < len; ++i) {
 			const img = MiscUtil.copyFast(entry.images[i]);
@@ -864,7 +866,7 @@ RendererMarkdown.utils = class {
 		static getRenderedAbilityScores (ent, {prefix = ""} = "") {
 			return `${prefix}|${Parser.ABIL_ABVS.map(it => `${it.toUpperCase()}|`).join("")}
 ${prefix}|:---:|:---:|:---:|:---:|:---:|:---:|
-${prefix}|${Parser.ABIL_ABVS.map(ab => `${ent[ab]} (${Parser.getAbilityModifier(ent[ab])})|`).join("")}`;
+${prefix}|${Parser.ABIL_ABVS.map(ab => ent[ab] == null ? `\u2014|` : `${ent[ab]} (${Parser.getAbilityModifier(ent[ab])})|`).join("")}`;
 		}
 	};
 
@@ -897,7 +899,7 @@ RendererMarkdown.monster = class {
 
 		const monTypes = Parser.monTypeToFullObj(mon.type);
 		RendererMarkdown.get().isSkipStylingItemLinks = true;
-		const acPart = Parser.acToFull(mon.ac, RendererMarkdown.get());
+		const acPart = mon.ac == null ? "\u2014" : Parser.acToFull(mon.ac, RendererMarkdown.get());
 		RendererMarkdown.get().isSkipStylingItemLinks = false;
 		const resourcePart = mon.resource?.length
 			? mon.resource
@@ -907,11 +909,11 @@ RendererMarkdown.monster = class {
 		const abilityScorePart = RendererMarkdown.utils.compact.getRenderedAbilityScores(mon, {prefix: ">"});
 		const savePart = mon.save ? `\n>- **Saving Throws** ${Object.keys(mon.save).sort(SortUtil.ascSortAtts).map(it => RendererMarkdown.monster.getSave(it, mon.save[it])).join(", ")}` : "";
 		const skillPart = mon.skill ? `\n>- **Skills** ${RendererMarkdown.monster.getSkillsString(mon)}` : "";
-		const damVulnPart = mon.vulnerable ? `\n>- **Damage Vulnerabilities** ${Parser.getFullImmRes(mon.vulnerable)}` : "";
-		const damResPart = mon.resist ? `\n>- **Damage Resistances** ${Parser.getFullImmRes(mon.resist)}` : "";
-		const damImmPart = mon.immune ? `\n>- **Damage Immunities** ${Parser.getFullImmRes(mon.immune)}` : "";
+		const damVulnPart = mon.vulnerable ? `\n>- **Damage Vulnerabilities** ${Parser.getFullImmRes(mon.vulnerable, {isPlainText: true})}` : "";
+		const damResPart = mon.resist ? `\n>- **Damage Resistances** ${Parser.getFullImmRes(mon.resist, {isPlainText: true})}` : "";
+		const damImmPart = mon.immune ? `\n>- **Damage Immunities** ${Parser.getFullImmRes(mon.immune, {isPlainText: true})}` : "";
 		const condImmPart = mon.conditionImmune ? `\n>- **Condition Immunities** ${Parser.getFullCondImm(mon.conditionImmune, {isPlainText: true})}` : "";
-		const sensePart = !opts.isHideSenses ? `\n>- **Senses** ${mon.senses ? `${Renderer.monster.getRenderedSenses(mon.senses, true)}, ` : ""}passive Perception ${mon.passive || "\u2014"}` : "";
+		const sensePart = !opts.isHideSenses ? `\n>- **Senses** ${mon.senses ? `${Renderer.utils.getRenderedSenses(mon.senses, true)}, ` : ""}passive Perception ${mon.passive || "\u2014"}` : "";
 		const languagePart = !opts.isHideLanguages ? `\n>- **Languages** ${Renderer.monster.getRenderedLanguages(mon.languages)}` : "";
 
 		const fnGetSpellTraits = RendererMarkdown.monster.getSpellcastingRenderedTraits.bind(RendererMarkdown.monster, meta);
@@ -945,7 +947,7 @@ RendererMarkdown.monster = class {
 >*${mon.level ? `${Parser.getOrdinalForm(mon.level)}-level ` : ""}${Renderer.utils.getRenderedSize(mon.size)} ${monTypes.asText}${mon.alignment ? `, ${mon.alignmentPrefix ? RendererMarkdown.get().render(mon.alignmentPrefix) : ""}${Parser.alignmentListToFull(mon.alignment)}` : ""}*
 >___
 >- **Armor Class** ${acPart}
->- **Hit Points** ${Renderer.monster.getRenderedHp(mon.hp, true)}${resourcePart}
+>- **Hit Points** ${mon.hp == null ? "\u2014" : Renderer.monster.getRenderedHp(mon.hp, true)}${resourcePart}
 >- **Speed** ${Parser.getSpeedString(mon)}
 >___
 ${abilityScorePart}
@@ -1071,7 +1073,9 @@ ${mon.pbNote || Parser.crToNumber(mon.cr) < VeCt.CR_CUSTOM ? `>- **Proficiency B
 			entry.type = entry.type || "spellcasting";
 			const renderStack = [""];
 			renderer._recursiveRender(entry, renderStack, meta, {prefix: ">"});
-			out.push({name: entry.name, rendered: renderStack.join("")});
+			const rendered = renderStack.join("");
+			if (!rendered.length) return;
+			out.push({name: entry.name, rendered});
 		});
 		meta.depth = cacheDepth;
 		return out;
@@ -1373,7 +1377,10 @@ RendererMarkdown.race = class {
 RendererMarkdown.feat = class {
 	static getCompactRenderedString (ent, opts = {}) {
 		const entries = [
-			RendererMarkdown.generic.getRenderedPrerequisite(ent),
+			Renderer.feat.getJoinedCategoryPrerequisites(
+				ent.category,
+				RendererMarkdown.generic.getRenderedPrerequisite(ent),
+			),
 			Renderer.utils.getRepeatableEntry(ent),
 			Renderer.feat.getFeatRendereableEntriesMeta(ent)?.entryMain,
 		]
@@ -1682,6 +1689,8 @@ RendererMarkdown.vehicle = class {
 			renderer.render(entriesMetaShip.entrySizeDimensions),
 			RendererMarkdown.vehicle.ship.getCrewCargoPaceSection_(ent, {entriesMetaShip}),
 			RendererMarkdown.utils.compact.getRenderedAbilityScores(ent),
+			entriesMeta.entryDamageVulnerabilities ? renderer.render(entriesMeta.entryDamageVulnerabilities) : null,
+			entriesMeta.entryDamageResistances ? renderer.render(entriesMeta.entryDamageResistances) : null,
 			entriesMeta.entryDamageImmunities ? renderer.render(entriesMeta.entryDamageImmunities) : null,
 			entriesMeta.entryConditionImmunities ? renderer.render(entriesMeta.entryConditionImmunities) : null,
 			ent.action ? "### Actions" : null,
@@ -1763,6 +1772,8 @@ RendererMarkdown.vehicle = class {
 				.map(prop => renderer.render(entriesMetaInfwar[prop])),
 			renderer.render(entriesMetaInfwar.entrySpeedNote),
 			RendererMarkdown.utils.compact.getRenderedAbilityScores(ent),
+			entriesMeta.entryDamageVulnerabilities ? renderer.render(entriesMeta.entryDamageVulnerabilities) : null,
+			entriesMeta.entryDamageResistances ? renderer.render(entriesMeta.entryDamageResistances) : null,
 			entriesMeta.entryDamageImmunities ? renderer.render(entriesMeta.entryDamageImmunities) : null,
 			entriesMeta.entryConditionImmunities ? renderer.render(entriesMeta.entryConditionImmunities) : null,
 			...this._getLinesRendered_traits({ent, renderer}),
@@ -1873,7 +1884,7 @@ RendererMarkdown.generic = class {
 
 	static getRenderedPrerequisite (ent) {
 		const out = Renderer.utils.prerequisite.getHtml(ent.prerequisite, {isTextOnly: true, isSkipPrefix: true});
-		return out ? `**Prerequisite:** ${out}` : "";
+		return out ? `Prerequisite: ${out}` : "";
 	}
 };
 

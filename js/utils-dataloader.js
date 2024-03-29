@@ -550,6 +550,9 @@ class _DataLoaderCache {
 	}
 
 	_set_getPartition (ent) {
+		if (ent.adventure) return this._set_getPartition_fromSource(SourceUtil.getEntitySource(ent.adventure));
+		if (ent.book) return this._set_getPartition_fromSource(SourceUtil.getEntitySource(ent.book));
+
 		if (ent.__prop !== "item" || ent._category !== "Specific Variant") return this._set_getPartition_fromSource(SourceUtil.getEntitySource(ent));
 
 		// "Specific Variant" items have a dual source. For the purposes of partitioning:
@@ -826,6 +829,14 @@ class _DataTypeLoaderFeatFluff extends _DataTypeLoaderSingleSource {
 	_filename = "fluff-feats.json";
 }
 
+class _DataTypeLoaderOptionalfeatureFluff extends _DataTypeLoaderSingleSource {
+	static PROPS = ["optionalfeatureFluff"];
+	static PAGE = UrlUtil.PG_OPT_FEATURES;
+	static IS_FLUFF = true;
+
+	_filename = "fluff-optionalfeatures.json";
+}
+
 class _DataTypeLoaderItemFluff extends _DataTypeLoaderSingleSource {
 	static PROPS = ["itemFluff"];
 	static PAGE = UrlUtil.PG_ITEMS;
@@ -888,6 +899,14 @@ class _DataTypeLoaderConditionDiseaseFluff extends _DataTypeLoaderSingleSource {
 	static IS_FLUFF = true;
 
 	_filename = "fluff-conditionsdiseases.json";
+}
+
+class _DataTypeLoaderTrapHazardFluff extends _DataTypeLoaderSingleSource {
+	static PROPS = ["trapFluff", "hazardFluff"];
+	static PAGE = UrlUtil.PG_TRAPS_HAZARDS;
+	static IS_FLUFF = true;
+
+	_filename = "fluff-trapshazards.json";
 }
 
 class _DataTypeLoaderPredefined extends _DataTypeLoader {
@@ -1690,6 +1709,7 @@ class DataLoader {
 		// region Fluff
 		_DataTypeLoaderBackgroundFluff.register({fnRegister});
 		_DataTypeLoaderFeatFluff.register({fnRegister});
+		_DataTypeLoaderOptionalfeatureFluff.register({fnRegister});
 		_DataTypeLoaderItemFluff.register({fnRegister});
 		_DataTypeLoaderRaceFluff.register({fnRegister});
 		_DataTypeLoaderLanguageFluff.register({fnRegister});
@@ -1699,6 +1719,7 @@ class DataLoader {
 		_DataTypeLoaderRecipeFluff.register({fnRegister});
 
 		_DataTypeLoaderConditionDiseaseFluff.register({fnRegister});
+		_DataTypeLoaderTrapHazardFluff.register({fnRegister});
 		// endregion
 	}
 
@@ -1986,7 +2007,7 @@ class DataLoader {
 
 		static _isPossibleSource ({parent, sourceClean}) { return parent._isPrereleaseSource({sourceClean}) && !Parser.SOURCE_JSON_TO_FULL[Parser.sourceJsonToJson(sourceClean)]; }
 		static _getBrewUtil () { return typeof PrereleaseUtil !== "undefined" ? PrereleaseUtil : null; }
-		static _pGetSourceIndex () { return DataUtil.prerelease.pLoadSourceIndex(); }
+		static async _pGetSourceIndex () { return DataUtil.prerelease.pLoadSourceIndex(await PrereleaseUtil.pGetCustomUrl()); }
 	};
 
 	static _BrewPreloader = class extends this._PrereleaseBrewPreloader {
@@ -1997,7 +2018,7 @@ class DataLoader {
 
 		static _isPossibleSource ({parent, sourceClean}) { return !parent._isSiteSource({sourceClean}) && !parent._isPrereleaseSource({sourceClean}); }
 		static _getBrewUtil () { return typeof BrewUtil2 !== "undefined" ? BrewUtil2 : null; }
-		static _pGetSourceIndex () { return DataUtil.brew.pLoadSourceIndex(); }
+		static async _pGetSourceIndex () { return DataUtil.brew.pLoadSourceIndex(await BrewUtil2.pGetCustomUrl()); }
 	};
 
 	static async _pCacheAndGet_getCacheMeta ({pageClean, sourceClean, dataLoader}) {

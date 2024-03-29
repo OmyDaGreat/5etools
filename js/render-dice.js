@@ -195,6 +195,8 @@ Renderer.dice = {
 	// endregion
 
 	// region Event handling
+	RE_PROMPT: /#\$prompt_number:?([^$]*)\$#/g,
+
 	async pRollerClickUseData (evt, ele) {
 		evt.stopPropagation();
 		evt.preventDefault();
@@ -233,10 +235,8 @@ Renderer.dice = {
 
 		if (!chosenRollData) return;
 
-		const rePrompt = /#\$prompt_number:?([^$]*)\$#/g;
 		const results = [];
-		let m;
-		while ((m = rePrompt.exec(chosenRollData.toRoll))) {
+		for (const m of chosenRollData.toRoll.matchAll(Renderer.dice.RE_PROMPT)) {
 			const optionsRaw = m[1];
 			const opts = {};
 			if (optionsRaw) {
@@ -263,8 +263,7 @@ Renderer.dice = {
 		}
 
 		const rollDataCpy = MiscUtil.copyFast(chosenRollData);
-		rePrompt.lastIndex = 0;
-		rollDataCpy.toRoll = rollDataCpy.toRoll.replace(rePrompt, () => results.shift());
+		rollDataCpy.toRoll = rollDataCpy.toRoll.replace(Renderer.dice.RE_PROMPT, () => results.shift());
 
 		// If there's a prompt, prompt the user to select the dice
 		let rollDataCpyToRoll;
@@ -714,7 +713,7 @@ Renderer.dice = {
 			const isColorSuccess = tree.isColorSuccessFail || !tree.chanceSuccessText;
 			const isColorFail = tree.isColorSuccessFail || !tree.chanceFailureText;
 			const totalPart = tree.successThresh != null
-				? `<span class="roll ${isThreshSuccess && isColorSuccess ? "roll-max" : !isThreshSuccess && isColorFail ? "roll-min" : ""}">${isThreshSuccess ? (tree.chanceSuccessText || "Success!") : (tree.chanceFailureText || "Failure")}</span>`
+				? `<span class="roll ${isThreshSuccess && isColorSuccess ? "roll-max" : !isThreshSuccess && isColorFail ? "roll-min" : ""}">${isThreshSuccess ? Renderer.get().render(tree.chanceSuccessText || "Success!") : Renderer.get().render(tree.chanceFailureText || "Failure")}</span>`
 				: `<span class="roll ${allMax ? "roll-max" : allMin ? "roll-min" : ""}">${result}</span>`;
 
 			const title = `${rolledBy.name ? `${rolledBy.name} \u2014 ` : ""}${lbl ? `${lbl}: ` : ""}${tree}`;

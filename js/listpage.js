@@ -107,7 +107,6 @@ class SublistManager {
 
 	/**
 	 * @param [opts]
-	 * @param [opts.sublistClass] Sublist class.
 	 * @param [opts.sublistListOptions] Other sublist options.
 	 * @param [opts.isSublistItemsCountable] If the sublist items should be countable, i.e. have a quantity.
 	 * @param [opts.shiftCountAddSubtract] If the sublist items should be countable, i.e. have a quantity.
@@ -115,7 +114,6 @@ class SublistManager {
 	constructor (opts) {
 		opts = opts || {};
 
-		this._sublistClass = opts.sublistClass; // TODO(PageGen) remove once all pages transitioned
 		this._sublistListOptions = opts.sublistListOptions || {};
 		this._isSublistItemsCountable = !!opts.isSublistItemsCountable;
 		this._shiftCountAddSubtract = opts.shiftCountAddSubtract ?? 20;
@@ -160,7 +158,7 @@ class SublistManager {
 
 		this._listSub = new List({
 			...this._sublistListOptions,
-			$wrpList: this._sublistClass ? $(`.${this._sublistClass}`) : $(`#sublist`),
+			$wrpList: $(`#sublist`),
 			isUseJquery: true,
 		});
 
@@ -190,7 +188,7 @@ class SublistManager {
 
 		this._listSub
 			.on("updated", () => {
-				this._plugins.forEach(plugin => plugin.doPulseSublistUpdate());
+				this._plugins.forEach(plugin => plugin.onSublistUpdate());
 			});
 	}
 
@@ -536,7 +534,7 @@ class SublistManager {
 	}
 
 	async pHandleClick_upload ({isAdditive = false} = {}) {
-		const {jsons, errors} = await DataUtil.pUserUpload({expectedFileTypes: [this._getDownloadFileType()]});
+		const {jsons, errors} = await DataUtil.pUserUpload({expectedFileTypes: this._getUploadFileTypes()});
 
 		DataUtil.doHandleFileLoadErrorsGeneric(errors);
 
@@ -553,10 +551,22 @@ class SublistManager {
 		return `${UrlUtil.getCurrentPage().replace(".html", "")}-sublist`;
 	}
 
+	_getDownloadFileTypeBase () {
+		return `${UrlUtil.getCurrentPage().replace(".html", "")}-sublist`;
+	}
+
 	_getDownloadFileType () {
 		const fromPlugin = this._plugins.first(plugin => plugin.getDownloadFileType());
 		if (fromPlugin) return fromPlugin;
-		return `${UrlUtil.getCurrentPage().replace(".html", "")}-sublist`;
+		return this._getDownloadFileTypeBase();
+	}
+
+	_getUploadFileTypes () {
+		const fromPlugin = this._plugins.first(plugin => plugin.getUploadFileTypes({
+			downloadFileTypeBase: this._getDownloadFileTypeBase(),
+		}));
+		if (fromPlugin) return fromPlugin;
+		return [this._getDownloadFileType()];
 	}
 
 	async pSetFromSubHashes (subHashes, pFnPreLoad) {
@@ -675,7 +685,11 @@ class SublistManager {
 	}
 
 	async _pFinaliseSublist ({isNoSave = false} = {}) {
-		this._listSub.update();
+		const isUpdateFired = this._listSub.update();
+
+		// Manually trigger plugin updates if the list failed to do so
+		if (!isUpdateFired) this._plugins.forEach(plugin => plugin.onSublistUpdate());
+
 		this._updateSublistVisibility();
 		this._onSublistChange();
 		if (!isNoSave) await this._pSaveSublist();
@@ -761,15 +775,24 @@ class SublistManager {
 
 		const page = UrlUtil.getCurrentPage();
 
-		for (const it of list.items) {
-			let toSend = await DataLoader.pCacheAndGetHash(page, it.h);
-
-			toSend = await Renderer.hover.pApplyCustomHashId(UrlUtil.getCurrentPage(), toSend, it.customHashId);
-
-			await ExtensionUtil._doSend("entity", {page, entity: toSend});
+		for (const serialItem of list.items) {
+			const {entity} = await this.constructor.pDeserializeExportedSublistItem(serialItem);
+			await ExtensionUtil._doSend("entity", {page, entity});
 		}
 
 		JqueryUtil.doToast(`Attempted to send ${len} item${len === 1 ? "" : "s"} to Foundry.`);
+	}
+
+	static async pDeserializeExportedSublistItem (serialItem) {
+		const page = UrlUtil.getCurrentPage();
+		const entityBase = await DataLoader.pCacheAndGetHash(page, serialItem.h);
+		return {
+			entity: await Renderer.hover.pApplyCustomHashId(page, entityBase, serialItem.customHashId),
+			entityBase: serialItem.customHashId != null ? entityBase : null,
+			count: serialItem.c,
+			isLocked: !!serialItem.l,
+			customHashId: serialItem.customHashId,
+		};
 	}
 
 	_rollSubListed ({evt}) {
@@ -962,7 +985,6 @@ class ListPage {
 	 * `pageFilter` must be specified.)
 	 * @param [opts.pageFilter] PageFilter implementation for this page. (Either `filters` and `filterSource` or
 	 * `pageFilter` must be specified.)
-	 * @param [opts.listClass] List class.
 	 * @param opts.listOptions Other list options.
 	 * @param opts.dataProps JSON data propert(y/ies).
 	 *
@@ -992,7 +1014,6 @@ class ListPage {
 		this._filters = opts.filters;
 		this._filterSource = opts.filterSource;
 		this._pageFilter = opts.pageFilter;
-		this._listClass = opts.listClass; // TODO(PageGen) remove once all pages transitioned
 		this._listOptions = opts.listOptions || {};
 		this._dataProps = opts.dataProps;
 		this._bookViewOptions = opts.bookViewOptions;
@@ -1127,7 +1148,7 @@ class ListPage {
 		const $btnReset = $("#reset");
 		this._list = this._initList({
 			$iptSearch,
-			$wrpList: this._listClass ? $(`.list.${this._listClass}`) : $(`#list`),
+			$wrpList: $(`#list`),
 			$btnReset,
 			$btnClear: $(`#lst__search-glass`),
 			dispPageTagline: document.getElementById(`page__subtitle`),
@@ -1334,7 +1355,7 @@ class ListPage {
 		$btnReset.before($btnHideSearch);
 
 		const $btnShowSearch = $(`<button class="btn btn-block btn-default btn-xs" type="button">Show List</button>`);
-		const $wrpBtnShowSearch = $$`<div class="col-12 mb-1 ve-hidden">${$btnShowSearch}</div>`.prependTo($wrpContent);
+		const $wrpBtnShowSearch = $$`<div class="ve-col-12 mb-1 ve-hidden">${$btnShowSearch}</div>`.prependTo($wrpContent);
 
 		$btnHideSearch.click(() => {
 			$wrpList.hideVe();

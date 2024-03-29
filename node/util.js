@@ -22,8 +22,17 @@ const FILE_EXTENSION_ALLOWLIST = [
 
 const FILE_PREFIX_BLOCKLIST = [
 	"bookref-",
-	"foundry-",
 	"gendata-",
+];
+
+const DIR_PREFIX_BLOCKLIST = [
+	"_",
+];
+
+const DIR_BLOCKLIST = [
+	".git",
+	".idea",
+	"node_modules",
 ];
 
 /**
@@ -31,22 +40,33 @@ const FILE_PREFIX_BLOCKLIST = [
  *
  * @param [opts] Options object.
  * @param [opts.blocklistFilePrefixes] Blocklisted filename prefixes (case sensitive).
+ * @param [opts.blocklistDirPrefixes] Blocklisted directory prefixes (case sensitive).
  * @param [opts.allowlistFileExts] Allowlisted filename extensions (case sensitive).
  * @param [opts.dir] Directory to list.
  * @param [opts.allowlistDirs] Directory allowlist.
+ * @param [opts.blocklistDirs] Directory blocklist.
  */
 function listFiles (opts) {
 	opts = opts || {};
-	opts.dir = opts.dir || "./data";
-	opts.blocklistFilePrefixes = opts.blocklistFilePrefixes || FILE_PREFIX_BLOCKLIST;
-	opts.allowlistFileExts = opts.allowlistFileExts || FILE_EXTENSION_ALLOWLIST;
+	opts.dir = opts.dir ?? "./data";
+	opts.blocklistFilePrefixes = opts.blocklistFilePrefixes === undefined ? FILE_PREFIX_BLOCKLIST : opts.blocklistFilePrefixes;
+	opts.blocklistDirPrefixes = opts.blocklistDirPrefixes === undefined ? DIR_PREFIX_BLOCKLIST : opts.blocklistDirPrefixes;
+	opts.allowlistFileExts = opts.allowlistFileExts === undefined ? FILE_EXTENSION_ALLOWLIST : opts.allowlistFileExts;
 	opts.allowlistDirs = opts.allowlistDirs || null;
+	opts.blocklistDirs = opts.blocklistDirs === undefined ? DIR_BLOCKLIST : opts.blocklistDirs;
 
 	const dirContent = fs.readdirSync(opts.dir, "utf8")
 		.filter(file => {
 			const path = `${opts.dir}/${file}`;
-			if (isDirectory(path)) return opts.allowlistDirs ? opts.allowlistDirs.includes(path) : true;
-			return !opts.blocklistFilePrefixes.some(it => file.startsWith(it)) && opts.allowlistFileExts.some(it => file.endsWith(it));
+
+			if (isDirectory(path)) {
+				if (opts.blocklistDirPrefixes != null && opts.blocklistDirPrefixes.some(it => file.startsWith(it))) return false;
+				if (opts.blocklistDirs != null && opts.blocklistDirs.some(it => it === file)) return false;
+				return opts.allowlistDirs ? opts.allowlistDirs.includes(path) : true;
+			}
+
+			return (opts.blocklistFilePrefixes == null || !opts.blocklistFilePrefixes.some(it => file.startsWith(it)))
+				&& (opts.allowlistFileExts == null || opts.allowlistFileExts.some(it => file.endsWith(it)));
 		})
 		.map(file => `${opts.dir}/${file}`);
 

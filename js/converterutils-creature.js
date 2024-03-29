@@ -2,6 +2,12 @@
 
 class AcConvert {
 	static tryPostProcessAc (mon, cbMan, cbErr) {
+		const traitNames = new Set(
+			(mon.trait || [])
+				.map(it => it.name ? it.name.toLowerCase() : null)
+				.filter(Boolean),
+		);
+
 		if (this._tryPostProcessAc_special(mon, cbMan, cbErr)) return;
 
 		const nuAc = [];
@@ -114,14 +120,14 @@ class AcConvert {
 
 						// everything else
 						default: {
-							const simpleFrom = this._getSimpleFrom(fromLow);
+							const simpleFrom = this._getSimpleFrom({fromLow, traitNames});
 							if (simpleFrom) return froms.push(simpleFrom);
 
 							// Special parsing for barding, as the pre-barding armor type might not exactly match our known
 							//   barding names (e.g. "chainmail barding")
 							const mWithBarding = /^(?<ac>\d+) with (?<name>(?<type>.*?) barding)$/.exec(fromLow);
 							if (mWithBarding) {
-								let simpleFromBarding = this._getSimpleFrom(mWithBarding.groups.type);
+								let simpleFromBarding = this._getSimpleFrom({fromLow: mWithBarding.groups.type, traitNames});
 								if (simpleFromBarding) {
 									simpleFromBarding = simpleFromBarding
 										.replace(/{@item ([^}]+)}/, (...m) => {
@@ -203,7 +209,7 @@ class AcConvert {
 		return false;
 	}
 
-	static _getSimpleFrom (fromLow) {
+	static _getSimpleFrom ({fromLow, traitNames}) {
 		switch (fromLow) {
 			// region unhandled/other
 			case "unarmored defense":
@@ -242,6 +248,12 @@ class AcConvert {
 			case "graz'zt's gift": // KftGV :: Sythian Skalderang
 			case "damaged plate": // BGG :: Firegaunt
 			case "intellect fortress": // N.b. *not* the spell of the same name, as this usually appears as a creature feature
+			case "veiled presence": // BMT :: Enchanting Infiltrator
+			case "coat of lies": // Grim Hollow: Lairs of Etharis
+			case "rotting buff coat":
+			case "battered splint mail":
+			case "natural & tailored leather":
+			case "canny defense": // Dungeons of Drakkenheim
 				return fromLow;
 				// endregion
 
@@ -303,6 +315,7 @@ class AcConvert {
 			case "robe of the archmagi": return "{@item robe of the archmagi}";
 			case "robe of the archmage": return "{@item robe of the archmagi}";
 			case "staff of power": return "{@item staff of power}";
+			case "wrought-iron tower": return "{@item wrought-iron tower|CoA}";
 			// endregion
 
 			default: {
@@ -314,6 +327,10 @@ class AcConvert {
 				}
 
 				if (/scraps of .*?armor/i.test(fromLow)) { // e.g. "scraps of hide armor"
+					return fromLow;
+				}
+
+				if (traitNames.has(fromLow)) {
 					return fromLow;
 				}
 			}
@@ -364,9 +381,19 @@ class _CreatureImmunityResistanceVulnerabilityConverterBase {
 	static _getSplitInput ({ipt}) {
 		return ipt
 			.toLowerCase()
-			.split(";")
+
+			// Split e.g.
+			// "Bludgeoning and Piercing from nonmagical attacks, Acid, Fire, Lightning"
+			.split(/(.*\b(?:from|by)\b[^,;.!?]+)(?:[,;] ?)?/g)
 			.map(it => it.trim())
-			.filter(Boolean);
+			.filter(Boolean)
+
+			// Split e.g.
+			// "poison; bludgeoning, piercing, and slashing from nonmagical attacks"
+			.flatMap(pt => pt.split(";"))
+			.map(it => it.trim())
+			.filter(Boolean)
+		;
 	}
 
 	/**
@@ -1336,9 +1363,14 @@ class MiscTag {
 globalThis.MiscTag = MiscTag;
 
 class SpellcastingTraitConvert {
+	static SPELL_SRC_MAP = {};
+	static SPELL_SRD_MAP = {};
+
 	static init (spellData) {
-		// reversed so official sources take precedence over 3pp
-		spellData.forEach(s => SpellcastingTraitConvert.SPELL_SRC_MAP[s.name.toLowerCase()] = s.source);
+		spellData.forEach(s => {
+			this.SPELL_SRC_MAP[s.name.toLowerCase()] = s.source;
+			if (typeof s.srd === "string") this.SPELL_SRD_MAP[s.srd.toLowerCase()] = s.name;
+		});
 	}
 
 	static tryParseSpellcasting (ent, {isMarkdown, cbErr, displayAs, actions, reactions}) {
@@ -1352,7 +1384,11 @@ class SpellcastingTraitConvert {
 
 	static _parseSpellcasting ({ent, isMarkdown, displayAs, actions, reactions}) {
 		let hasAnyHeader = false;
-		const spellcastingEntry = {"name": ent.name, "headerEntries": [this._parseToHit(ent.entries[0])]};
+		const spellcastingEntry = {
+			"name": ent.name,
+			"type": "spellcasting",
+			"headerEntries": [this._parseToHit(ent.entries[0])],
+		};
 		ent.entries.forEach((thisLine, i) => {
 			thisLine = thisLine.replace(/,\s*\*/g, ",*"); // put asterisks on the correct side of commas
 			if (i === 0) return;
@@ -1361,6 +1397,7 @@ class SpellcastingTraitConvert {
 				{re: /\/rest/i, prop: "rest"},
 				{re: /\/day/i, prop: "daily"},
 				{re: /\/week/i, prop: "weekly"},
+				{re: /\/month/i, prop: "monthly"},
 				{re: /\/yeark/i, prop: "yearly"},
 			];
 
@@ -1368,14 +1405,14 @@ class SpellcastingTraitConvert {
 
 			if (perDuration) {
 				hasAnyHeader = true;
-				let property = thisLine.substr(0, 1) + (thisLine.includes(" each:") ? "e" : "");
+				let property = thisLine.substring(0, 1) + (/ each(?::| - )/.test(thisLine) ? "e" : "");
 				const value = this._getParsedSpells({thisLine, isMarkdown});
 				if (!spellcastingEntry[perDuration.prop]) spellcastingEntry[perDuration.prop] = {};
 				spellcastingEntry[perDuration.prop][property] = value;
-			} else if (thisLine.startsWith("Constant: ")) {
+			} else if (/^Constant(?::| -) /.test(thisLine)) {
 				hasAnyHeader = true;
 				spellcastingEntry.constant = this._getParsedSpells({thisLine, isMarkdown});
-			} else if (thisLine.startsWith("At will: ")) {
+			} else if (/^At[- ][Ww]ill(?::| -) /.test(thisLine)) {
 				hasAnyHeader = true;
 				spellcastingEntry.will = this._getParsedSpells({thisLine, isMarkdown});
 			} else if (thisLine.includes("Cantrip")) {
@@ -1383,15 +1420,15 @@ class SpellcastingTraitConvert {
 				const value = this._getParsedSpells({thisLine, isMarkdown});
 				if (!spellcastingEntry.spells) spellcastingEntry.spells = {"0": {"spells": []}};
 				spellcastingEntry.spells["0"].spells = value;
-			} else if (thisLine.includes(" level") && thisLine.includes(": ")) {
+			} else if (/[- ][Ll]evel/.test(thisLine) && /(?::| -) /.test(thisLine)) {
 				hasAnyHeader = true;
-				let property = thisLine.substr(0, 1);
+				let property = thisLine.substring(0, 1);
 				const allSpells = this._getParsedSpells({thisLine, isMarkdown});
 				spellcastingEntry.spells = spellcastingEntry.spells || {};
 
 				const out = {};
 				if (thisLine.includes(" slot")) {
-					const mWarlock = /^(\d)..(?: level)?-(\d).. level \((\d) (\d)..[- ]level slots?\)/.exec(thisLine);
+					const mWarlock = /^(\d)..(?:[- ][Ll]evel)?-(\d)..[- ][Ll]evel \((\d) (\d)..[- ][Ll]evel slots?\)/.exec(thisLine);
 					if (mWarlock) {
 						out.lower = parseInt(mWarlock[1]);
 						out.slots = parseInt(mWarlock[3]);
@@ -1426,7 +1463,8 @@ class SpellcastingTraitConvert {
 	}
 
 	static _getParsedSpells ({thisLine, isMarkdown}) {
-		let spellPart = thisLine.substring(thisLine.indexOf(": ") + 2).trim();
+		const mLabelSep = /(?::| -) /.exec(thisLine);
+		let spellPart = thisLine.substring((mLabelSep?.index || 0) + (mLabelSep?.[0]?.length || 0)).trim();
 		if (isMarkdown) {
 			const cleanPart = (part) => {
 				part = part.trim();
@@ -1477,12 +1515,24 @@ class SpellcastingTraitConvert {
 			str = str.substring(0, ixParenOpen);
 		}
 
+		str = this._parseSpell_getNonSrdSpellName(str);
+
 		return [
 			`{@spell ${str}${this._parseSpell_getSourcePart(str)}}`,
 			ptsSuffix.join(" "),
 		]
 			.filter(Boolean)
 			.join(" ");
+	}
+
+	static _parseSpell_getNonSrdSpellName (spellName) {
+		const nonSrdName = SpellcastingTraitConvert.SPELL_SRD_MAP[spellName.toLowerCase().trim()];
+		if (!nonSrdName) return spellName;
+
+		if (spellName.toSpellCase() === spellName) return nonSrdName.toSpellCase();
+		if (spellName.toLowerCase() === spellName) return nonSrdName.toLowerCase();
+		if (spellName.toTitleCase() === spellName) return nonSrdName.toTitleCase();
+		return spellName;
 	}
 
 	static _parseSpell_getSourcePart (spellName) {
@@ -1570,7 +1620,6 @@ class SpellcastingTraitConvert {
 		});
 	}
 }
-SpellcastingTraitConvert.SPELL_SRC_MAP = {};
 
 globalThis.SpellcastingTraitConvert = SpellcastingTraitConvert;
 
@@ -1688,7 +1737,24 @@ globalThis.SpeedConvert = SpeedConvert;
 
 class DetectNamedCreature {
 	static tryRun (mon) {
+		if (this._tryRun_nickname(mon)) return;
+		this._tryRun_heuristic(mon);
+	}
+
+	static _tryRun_nickname (mon) {
+		if (
+			/^[^"]+ "[^"]+" [^"]+/.test(mon.name)
+			|| /^[^']+ '[^']+' [^']+/.test(mon.name)
+		) {
+			mon.isNamedCreature = true;
+			return true;
+		}
+		return false;
+	}
+
+	static _tryRun_heuristic (mon) {
 		const totals = {yes: 0, no: 0};
+
 		this._doCheckProp(mon, totals, "trait");
 		this._doCheckProp(mon, totals, "spellcasting");
 		this._doCheckProp(mon, totals, "action");
@@ -1698,6 +1764,8 @@ class DetectNamedCreature {
 		this._doCheckProp(mon, totals, "mythic");
 
 		if (totals.yes && totals.yes > totals.no) mon.isNamedCreature = true;
+
+		return true;
 	}
 
 	static _doCheckProp (mon, totals, prop) {
@@ -1876,3 +1944,16 @@ class CreatureSavingThrowTagger extends _PrimaryLegendarySpellsTaggerBase {
 }
 
 globalThis.CreatureSavingThrowTagger = CreatureSavingThrowTagger;
+
+class CreatureSpecialEquipmentTagger {
+	static tryRun (mon) {
+		if (!mon.trait) return;
+		mon.trait = mon.trait
+			.map(ent => {
+				if (!/\bEquipment\b/.test(ent.name || "")) return ent;
+				return ItemTag.tryRun(ent);
+			});
+	}
+}
+
+globalThis.CreatureSpecialEquipmentTagger = CreatureSpecialEquipmentTagger;

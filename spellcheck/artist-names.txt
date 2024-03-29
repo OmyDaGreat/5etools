@@ -74,6 +74,7 @@ Gesincourt
 Gibney
 Giorello
 Girard
+Gissubel
 Goñi
 Graciano
 Grenier
@@ -83,6 +84,7 @@ Hagan
 Hannigan
 Hartin
 Helmigh
+Henriquez
 Hieu
 Hinchel
 Honoré
@@ -99,6 +101,7 @@ Jinho
 Jokubas
 Joma
 Jordana
+Kachatorian
 Kafis
 Kasia
 Keiser
@@ -122,10 +125,11 @@ Leesha
 Lemen
 Leuw
 Liiga
-Lithen
+Lithén
 Litterell
 Lius
 Ljunggren
+Lovitt
 Luiza
 Lukacs
 Lutfullina
@@ -178,9 +182,11 @@ Sasso
 Schley
 Setiawan
 Sevestre
+Shavrin
 Shkipin
 Sidharth
 Sinek
+Sipl
 Siswanto
 Sladek
 Slawomir
@@ -189,7 +195,6 @@ Souza
 Stanko
 Stawicki
 Steinbauer
-Straub
 Straub
 Swekel
 Syme
@@ -200,6 +205,7 @@ Tenery
 Terese
 Thabiso
 Thacker
+Tinnel
 Titov
 Tomasz
 Trampier
@@ -208,6 +214,7 @@ Trott
 Turkel
 Uogintas
 Valeza
+Vallez
 Veltkamp
 Viko
 Villasenor
@@ -223,6 +230,7 @@ Yeong-Hao
 Yigit
 Yongjae
 Zabrocki
+Zaccaria
 Zafiratos
 Zezhou
 Zielińska

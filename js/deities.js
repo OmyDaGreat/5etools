@@ -5,22 +5,22 @@ class DeitiesSublistManager extends SublistManager {
 		return [
 			new SublistCellTemplate({
 				name: "Name",
-				css: "bold col-4 pl-0",
+				css: "bold ve-col-4 pl-0",
 				colStyle: "",
 			}),
 			new SublistCellTemplate({
 				name: "Pantheon",
-				css: "col-2 ve-text-center",
+				css: "ve-col-2 ve-text-center",
 				colStyle: "text-center",
 			}),
 			new SublistCellTemplate({
 				name: "Alignment",
-				css: "col-2 ve-text-center",
+				css: "ve-col-2 ve-text-center",
 				colStyle: "text-center",
 			}),
 			new SublistCellTemplate({
 				name: "Domains",
-				css: "col-4",
+				css: "ve-col-4",
 				colStyle: "",
 			}),
 		];
@@ -72,34 +72,34 @@ class DeitiesPage extends ListPage {
 		});
 	}
 
-	getListItem (g, dtI, isExcluded) {
-		this._pageFilter.mutateAndAddToFilters(g, isExcluded);
+	getListItem (ent, dtI, isExcluded) {
+		this._pageFilter.mutateAndAddToFilters(ent, isExcluded);
 
 		const eleLi = document.createElement("div");
 		eleLi.className = `lst__row ve-flex-col ${isExcluded ? "lst__row--blocklisted" : ""}`;
 
-		const source = Parser.sourceJsonToAbv(g.source);
-		const hash = UrlUtil.autoEncodeHash(g);
-		const alignment = g.alignment ? g.alignment.join("") : "\u2014";
-		const domains = g.domains.join(", ");
+		const source = Parser.sourceJsonToAbv(ent.source);
+		const hash = UrlUtil.autoEncodeHash(ent);
+		const alignment = ent.alignment ? ent.alignment.join("") : "\u2014";
+		const domains = ent.domains.join(", ");
 
 		eleLi.innerHTML = `<a href="#${hash}" class="lst--border lst__row-inner">
-			<span class="bold col-3 pl-0">${g.name}</span>
-			<span class="col-2 ve-text-center">${g.pantheon}</span>
-			<span class="col-2 ve-text-center">${alignment}</span>
-			<span class="col-3 ${g.domains[0] === VeCt.STR_NONE ? `list-entry-none` : ""}">${domains}</span>
-			<span class="col-2 ve-text-center ${Parser.sourceJsonToColor(g.source)} pr-0" title="${Parser.sourceJsonToFull(g.source)}" ${Parser.sourceJsonToStyle(g.source)}>${source}</span>
+			<span class="bold ve-col-3 pl-0">${ent.name}</span>
+			<span class="ve-col-2 ve-text-center">${ent.pantheon}</span>
+			<span class="ve-col-2 ve-text-center">${alignment}</span>
+			<span class="ve-col-3 ${ent.domains[0] === VeCt.STR_NONE ? `list-entry-none` : ""}">${domains}</span>
+			<span class="ve-col-2 ve-text-center ${Parser.sourceJsonToColor(ent.source)} pr-0" title="${Parser.sourceJsonToFull(ent.source)}" ${Parser.sourceJsonToStyle(ent.source)}>${source}</span>
 		</a>`;
 
 		const listItem = new ListItem(
 			dtI,
 			eleLi,
-			g.name,
+			ent.name,
 			{
 				hash,
 				source,
-				title: g.title || "",
-				pantheon: g.pantheon,
+				title: ent.title || "",
+				pantheon: ent.pantheon,
 				alignment,
 				domains,
 			},

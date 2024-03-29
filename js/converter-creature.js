@@ -89,6 +89,7 @@ class CreatureParser extends BaseParser {
 		if (!nxtLine) return false;
 
 		if (ConvertUtil.isNameLine(nxtLine)) return false; // avoid absorbing the start of traits
+		if (ConvertUtil.isListItemLine(nxtLine)) return false;
 		if (this._NO_ABSORB_TITLES.some(it => nxtLine.toUpperCase().includes(it))) return false;
 		if (this._NO_ABSORB_SUBTITLES.some(it => nxtLine.toUpperCase().startsWith(it))) return false;
 
@@ -152,7 +153,7 @@ class CreatureParser extends BaseParser {
 			// name of monster
 			if (meta.ixToConvert === 0) {
 				// region
-				const mCr = /^(?<name>.*)\s+(?<cr>CR \d+(?:\/\d+)? .*$)/.exec(meta.curLine);
+				const mCr = /^(?<name>.*)\s+(?<cr>CR (?:\d+(?:\/\d+)?|[⅛¼½]) .*$)/.exec(meta.curLine);
 				if (mCr) {
 					meta.curLine = mCr.groups.name;
 					meta.toConvert.splice(meta.ixToConvert + 1, 0, mCr.groups.cr);
@@ -368,7 +369,7 @@ class CreatureParser extends BaseParser {
 				}
 
 				// Avoid eating spellcasting `At Will: ...`
-				const splColonNext = lineNxt.split(":");
+				const splColonNext = lineNxt.split(/(?::| -) /g).filter(Boolean);
 				if (line.trim().endsWith(":") && splColonNext.length > 1 && /^[A-Z\d][\\/a-z]/.test(splColonNext[0].trim())) continue;
 
 				meta.toConvert[j] = `${line.trim()} ${lineNxt.trim()}`;
@@ -588,40 +589,52 @@ class CreatureParser extends BaseParser {
 			.forEach(({re, original}) => clean = clean.replace(re, `\n${original}\n`));
 		// endregion
 
+		// region Handle bad OCR'ing of dice
 		clean = clean
-			// region Handle bad OCR'ing of dice
 			.replace(/\nl\/(?<unit>day)[.:]\s*/g, (...m) => `\n1/${m.last().unit}: `)
 			.replace(/\b(?<num>[liI!]|\d+)?d[1liI!]\s*[oO0]\b/g, (...m) => `${m.last().num ? isNaN(m.last().num) ? "1" : m.last().num : ""}d10`)
 			.replace(/\b(?<num>[liI!]|\d+)?d[1liI!]\s*2\b/g, (...m) => `${m.last().num ? isNaN(m.last().num) ? "1" : m.last().num : ""}d12`)
 			.replace(/\b[liI!1]\s*d\s*(?<faces>\d+)\b/g, (...m) => `1d${m.last().faces}`)
 			.replace(/\b(?<num>\d+)\s*d\s*(?<faces>\d+)\b/g, (...m) => `${m.last().num}d${m.last().faces}`)
-			// endregion
+		;
+		// endregion
 
-			// region Handle misc OCR issues
+		// region Handle misc OCR issues
+		clean = clean
 			.replace(/\bI nt\b/g, "Int")
 			.replace(/\(-[lI!]\)/g, "(-1)")
-			// endregion
+		;
+		// endregion
 
-			// Handle modifiers split across lines
+		// Handle modifiers split across lines
+		clean = clean
 			.replace(/([-+] +)\n +(\d+|PB)/g, (...m) => `${m[1]}${m[2]}`)
+		;
 
-			// Handle CR XP on separate line
+		// Handle CR XP on separate line
+		clean = clean
 			.replace(/\n(\([\d,]+ XP\)\n)/g, (...m) => m[1])
+		;
 
-			// region Split sentences which should *generally* in the same paragraph
+		// region Split sentences which should *generally* in the same paragraph
+		clean = clean
 			// Handle split "DC-sentence then effect-sentence"
 			.replace(/(\.\s*?)\n(On a (?:failed save|failure|success|successful save)\b)/g, (...m) => `${m[1].trimEnd()} ${m[2]}`)
 			// Handle split "The target..." sentences
 			.replace(/(\.\s*?)\n(The target (?:then|must|regains)\b)/g, (...m) => `${m[1].trimEnd()} ${m[2]}`)
 			// Handle split "A creature..." sentences
 			.replace(/(\.\s*?)\n(A creature (?:takes)\b)/g, (...m) => `${m[1].trimEnd()} ${m[2]}`)
-			// endregion
+		;
+		// endregion
 
+		clean = clean
 			// Handle split `Melee Attack: ...`
 			.replace(/((?:Melee|Ranged) (?:(?:Weapon|Spell|Area|Power) )?Attack:)\s*?\n\s*([-+])/g, (...m) => `${m[1]} ${m[2]}`)
 			// Handle split `Hit: ... damage. If ...`
 			.replace(/(Hit: [^.!?]+ damage(?: [^.!?]+)?[.!?])\s*?\n\s*(If)\b/g, (...m) => `${m[1].trimEnd()} ${m[2].trimStart()}`)
+		;
 
+		clean = clean
 			// Homebrew spell action superscript
 			// handle `commune\n+, ...`
 			.replace(/([a-z]) *\n([ABR+], )/mg, (...m) => `${m[1]} ${m[2]}`)
@@ -733,7 +746,7 @@ class CreatureParser extends BaseParser {
 				for (let i = 0; i < block.entries.length; ++i) {
 					const curLine = block.entries[i];
 
-					if (typeof curLine !== "string" || !curLine.trim().endsWith(":")) continue;
+					if (typeof curLine !== "string") continue;
 
 					let lst = null;
 					let offset = 1;
@@ -744,18 +757,30 @@ class CreatureParser extends BaseParser {
 						if (typeof nxtLine !== "string" || !/^[•●]/.test(nxtLine.trim())) break;
 
 						nxtLine = nxtLine.replace(/^[•●]\s*/, "");
+						const listItem = this._doMergeBulletedLists_getListItem(nxtLine);
 
 						if (!lst) {
-							lst = {type: "list", items: [nxtLine]};
+							lst = {type: "list", items: [listItem]};
 							block.entries[i + offset] = lst;
 							offset++;
 						} else {
-							lst.items.push(nxtLine);
+							lst.items.push(listItem);
 							block.entries.splice(i + offset, 1);
 						}
 					}
 				}
 			});
+	}
+
+	static _doMergeBulletedLists_getListItem (str) {
+		if (!ConvertUtil.isNameLine(str)) return str;
+
+		const {name, entry} = ConvertUtil.splitNameLine(str);
+		return {
+			type: "item",
+			name,
+			entry,
+		};
 	}
 
 	static _mutAssignPrettyType ({obj, type}) {
@@ -1351,10 +1376,14 @@ class CreatureParser extends BaseParser {
 	static _doStatblockPostProcess (stats, isMarkdown, options) {
 		this._doFilterAddSpellcasting(stats, "trait", isMarkdown, options);
 		this._doFilterAddSpellcasting(stats, "action", isMarkdown, options);
-		if (stats.trait) stats.trait.forEach(it => RechargeConvert.tryConvertRecharge(it, () => {}, () => options.cbWarning(`${stats.name ? `(${stats.name}) ` : ""}Manual recharge tagging required for trait "${it.name}"`)));
-		if (stats.action) stats.action.forEach(it => RechargeConvert.tryConvertRecharge(it, () => {}, () => options.cbWarning(`${stats.name ? `(${stats.name}) ` : ""}Manual recharge tagging required for action "${it.name}"`)));
-		if (stats.bonus) stats.bonus.forEach(it => RechargeConvert.tryConvertRecharge(it, () => {}, () => options.cbWarning(`${stats.name ? `(${stats.name}) ` : ""}Manual recharge tagging required for bonus action "${it.name}"`)));
-		CreatureParser._PROPS_ENTRIES.filter(prop => stats[prop]).forEach(prop => SpellTag.tryRun(stats[prop]));
+		CreatureParser._PROPS_ENTRIES
+			.filter(prop => stats[prop])
+			.forEach(prop => {
+				stats[prop].forEach(it => RechargeConvert.tryConvertRecharge(it, () => {}, () => options.cbWarning(`${stats.name ? `(${stats.name}) ` : ""}Manual recharge tagging required for ${prop} "${it.name}"`)));
+			});
+		CreatureParser._PROPS_ENTRIES
+			.filter(prop => stats[prop])
+			.forEach(prop => SpellTag.tryRun(stats[prop]));
 		AcConvert.tryPostProcessAc(
 			stats,
 			(ac) => options.cbWarning(`${stats.name ? `(${stats.name}) ` : ""}AC "${ac}" requires manual conversion`),
@@ -1378,6 +1407,7 @@ class CreatureParser extends BaseParser {
 				isTagInflicted: true,
 			},
 		);
+		CreatureSpecialEquipmentTagger.tryRun(stats);
 		TraitActionTag.tryRun(stats);
 		LanguageTag.tryRun(stats);
 		SenseFilterTag.tryRun(stats);
@@ -1388,6 +1418,7 @@ class CreatureParser extends BaseParser {
 		CreatureSavingThrowTagger.tryRun(stats);
 		CreatureSavingThrowTagger.tryRunSpells(stats);
 		CreatureSavingThrowTagger.tryRunRegionalsLairs(stats);
+		SkillTag.tryRunProps(stats, {props: Renderer.monster.CHILD_PROPS_EXTENDED});
 		MiscTag.tryRun(stats);
 		DetectNamedCreature.tryRun(stats);
 		TagImmResVulnConditional.tryRun(stats);
@@ -1428,14 +1459,18 @@ class CreatureParser extends BaseParser {
 
 	static _tryParseType ({stats, strType}) {
 		strType = strType.trim().toLowerCase();
-		const mSwarm = /^(.*)swarm of (\w+) (\w+)$/i.exec(strType);
+		const mSwarm = /^(?<prefix>.*)swarm of (?<size>\w+) (?<type>\w+)(?: \((?<tags>[^)]+)\))?$/i.exec(strType);
 		if (mSwarm) {
 			const swarmTypeSingular = Parser.monTypeFromPlural(mSwarm[3]);
 
-			return { // retain any leading junk, as we'll parse it out in a later step
-				type: `${mSwarm[1]}${swarmTypeSingular}`,
-				swarmSize: mSwarm[2][0].toUpperCase(),
+			const out = { // retain any leading junk, as we'll parse it out in a later step
+				type: `${mSwarm.groups.prefix}${swarmTypeSingular}`,
+				swarmSize: mSwarm.groups.size[0].toUpperCase(),
 			};
+
+			if (mSwarm.groups.tags) out.tags = this._tryParseType_getTags({str: mSwarm.groups.tags});
+
+			return out;
 		}
 
 		const mParens = /^(.*?) (\(.*?\))\s*$/.exec(strType);
@@ -1446,7 +1481,7 @@ class CreatureParser extends BaseParser {
 			if (stats.size.length > 1) {
 				note = mParens[2];
 			} else {
-				tags = mParens[2].split(",").map(s => s.replace(/\(/g, "").replace(/\)/g, "").trim());
+				tags = this._tryParseType_getTags({str: mParens[2]});
 			}
 			strType = mParens[1];
 		}
@@ -1467,6 +1502,10 @@ class CreatureParser extends BaseParser {
 		if (note) out.note = note;
 
 		return out;
+	}
+
+	static _tryParseType_getTags ({str}) {
+		return str.split(",").map(s => s.replace(/\(/g, "").replace(/\)/g, "").trim());
 	}
 
 	static _getSequentialAbilityScoreSectionLineCount (stats, meta) {
@@ -1522,12 +1561,12 @@ class CreatureParser extends BaseParser {
 	}
 
 	static _setCleanSizeTypeAlignment_standard (stats, meta, options) {
-		const ixSwarm = / swarm /.exec(meta.curLine)?.index;
+		const ixSwarm = / swarm /i.exec(meta.curLine)?.index;
 
 		// regular creatures
 
 		// region Size
-		const reSize = new RegExp(`(${Object.values(Parser.SIZE_ABV_TO_FULL).join("|")})`, "i");
+		const reSize = new RegExp(`\\b(${Object.values(Parser.SIZE_ABV_TO_FULL).join("|")})\\b`, "i");
 		const reSizeGlobal = new RegExp(reSize, "gi");
 
 		const tks = meta.curLine.split(reSizeGlobal);
@@ -1615,7 +1654,7 @@ class CreatureParser extends BaseParser {
 		spl.forEach(it => {
 			const m = /^(?<abil>\w+)\s*(?<sign>[-+])\s*(?<save>\d+)(?<plusPb>(?:\s+plus\s+|\s*\+\s*)PB)?$/i.exec(it);
 			if (m) {
-				out[m.groups.abil] = `${m.groups.sign}${m.groups.save}${m.groups.plusPb ? m.groups.plusPb.replace(/\bpb\b/gi, "PB") : ""}`;
+				out[m.groups.abil.slice(0, 3)] = `${m.groups.sign}${m.groups.save}${m.groups.plusPb ? m.groups.plusPb.replace(/\bpb\b/gi, "PB") : ""}`;
 				return;
 			}
 
@@ -1752,6 +1791,10 @@ class CreatureParser extends BaseParser {
 
 		if (!line) return;
 
+		if (/^[⅛¼½]$/.test(line)) {
+			line = Parser.numberToCr(Parser.vulgarToNumber(line));
+		}
+
 		if (!/^(\d+\/\d+|\d+)$/.test(line)) {
 			cbWarning(`${stats.name ? `(${stats.name}) ` : ""}CR requires manual conversion "${line}"`);
 			return;
@@ -1807,13 +1850,7 @@ class CreatureParser extends BaseParser {
 	}
 	// endregion
 }
-CreatureParser._PROPS_ENTRIES = [
-	"trait",
-	"action",
-	"bonus",
-	"reaction",
-	"legendary",
-	"mythic",
-];
+
+CreatureParser._PROPS_ENTRIES = Renderer.monster.CHILD_PROPS_EXTENDED.filter(it => it !== "spellcasting");
 
 globalThis.CreatureParser = CreatureParser;

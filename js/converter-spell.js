@@ -6,6 +6,15 @@ class SpellParser extends BaseParser {
 	static _RE_START_DURATION = "Duration";
 	static _RE_START_CLASS = "Class(?:es)?";
 
+	static _REQUIRED_PROPS = [
+		"level",
+		"school",
+		"time",
+		"range",
+		"duration",
+		"entries",
+	];
+
 	/**
 	 * Parses spells from raw text pastes
 	 * @param inText Input text.
@@ -117,6 +126,9 @@ class SpellParser extends BaseParser {
 
 		const statsOut = this._getFinalState(spell, options);
 
+		const missingProps = this._REQUIRED_PROPS.filter(prop => statsOut[prop] == null);
+		if (missingProps.length) options.cbWarning(`${statsOut.name ? `(${statsOut.name}) ` : ""}Missing properties: ${missingProps.join(", ")}`);
+
 		options.cbOutput(statsOut, options.isAppend);
 	}
 
@@ -204,7 +216,8 @@ class SpellParser extends BaseParser {
 		line = ConvertUtil.cleanDashes(line).trim();
 
 		const mCantrip = /cantrip/i.exec(line);
-		const mSpellLevel = /^(\d+)(?:st|nd|rd|th)?[- ]level/i.exec(line);
+		const mSpellLeve = /^(?<level>\d+)(?:st|nd|rd|th)?[- ]level/i.exec(line)
+			|| /^Level (?<level>\d+)\b/i.exec(line);
 
 		if (mCantrip) {
 			let trailing = line.slice(mCantrip.index + "cantrip".length, line.length).trim();
@@ -224,8 +237,8 @@ class SpellParser extends BaseParser {
 			return;
 		}
 
-		if (mSpellLevel) {
-			line = line.slice(mSpellLevel.index + mSpellLevel[0].length);
+		if (mSpellLeve) {
+			line = line.slice(mSpellLeve.index + mSpellLeve[0].length);
 
 			let isRitual = false;
 			line = line.replace(/\((.*?)(?:[,;]\s*)?ritual(?:[,;]\s*)?(.*?)\)/i, (...m) => {
@@ -239,7 +252,7 @@ class SpellParser extends BaseParser {
 				stats.meta.ritual = true;
 			}
 
-			stats.level = Number(mSpellLevel[1]);
+			stats.level = Number(mSpellLeve.groups.level);
 
 			const [tkSchool, ...tksSchoolRest] = line.trim().split(" ");
 			stats.school = tkSchool;
@@ -265,19 +278,32 @@ class SpellParser extends BaseParser {
 		if (!trailing) return trailing;
 
 		return trailing
-			.replace(new RegExp(`\\(${ConverterConst.STR_RE_CLASS}\\)`, "i"), (...m) => {
-				(stats.groups ||= []).push({
-					name: m.last().name,
-					source: stats.source,
-				});
-				return "";
+			.split(/([()])/g)
+			.map(tk => {
+				return tk
+					.split(StrUtil.COMMAS_NOT_IN_PARENTHESES_REGEX)
+					.map(tk => {
+						return tk
+							.replace(new RegExp(ConverterConst.STR_RE_CLASS, "i"), (...m) => {
+								(stats.groups ||= []).push({
+									name: m.last().name,
+									source: stats.source,
+								});
+								return "";
+							})
+							.replace(/\s+/g, " ")
+						;
+					})
+					.filter(it => it.trim())
+					.join(",");
 			})
-			.replace(/\s+/g, " ")
+			.join("")
+			.replace(/\(\s*\)/g, "")
 			.trim();
 	}
 
 	static _setCleanRange (stats, line, options) {
-		const getUnit = (str) => str.toLowerCase().includes("mile") ? "miles" : "feet";
+		const getUnit = (str) => /\b(miles|mi\.)\b/.test(str.toLowerCase()) ? "miles" : "feet";
 
 		const range = ConvertUtil.cleanDashes(ConvertUtil.getStatblockLineHeaderText({reStartStr: this._RE_START_RANGE, line}));
 
@@ -290,29 +316,29 @@ class SpellParser extends BaseParser {
 
 		const cleanRange = range.replace(/(\d),(\d)/g, "$1$2");
 
-		const mFeetMiles = /^(\d+) (feet|foot|miles?)$/i.exec(cleanRange);
-		if (mFeetMiles) return stats.range = {type: "point", distance: {type: getUnit(mFeetMiles[2]), amount: Number(mFeetMiles[1])}};
+		const mFeetMiles = /^(?<amount>\d+) (?<unit>feet|foot|ft\.?|miles?|mi\.?)$/i.exec(cleanRange);
+		if (mFeetMiles) return stats.range = {type: "point", distance: {type: getUnit(mFeetMiles.groups.unit), amount: Number(mFeetMiles.groups.amount)}};
 
-		const mSelfRadius = /^self \((\d+)-(foot|mile) radius\)$/i.exec(cleanRange);
+		const mSelfRadius = /^self \((\d+)-(foot|ft\.?|mile|mi\.?) radius\)$/i.exec(cleanRange);
 		if (mSelfRadius) return stats.range = {type: "radius", distance: {type: getUnit(mSelfRadius[2]), amount: Number(mSelfRadius[1])}};
 
-		const mSelfSphere = /^self \((\d+)-(foot|mile)-radius sphere\)$/i.exec(cleanRange);
+		const mSelfSphere = /^self \((\d+)-(foot|ft\.?|mile|mi\.?)(?:-radius)? sphere\)$/i.exec(cleanRange);
 		if (mSelfSphere) return stats.range = {type: "sphere", distance: {type: getUnit(mSelfSphere[2]), amount: Number(mSelfSphere[1])}};
 
-		const mSelfCone = /^self \((\d+)-(foot|mile) cone\)$/i.exec(cleanRange);
+		const mSelfCone = /^self \((\d+)-(foot|ft\.?|mile|mi\.?) cone\)$/i.exec(cleanRange);
 		if (mSelfCone) return stats.range = {type: "cone", distance: {type: getUnit(mSelfCone[2]), amount: Number(mSelfCone[1])}};
 
-		const mSelfLine = /^self \((\d+)-(foot|mile) line\)$/i.exec(cleanRange);
+		const mSelfLine = /^self \((\d+)-(foot|ft\.?|mile|mi\.?) line\)$/i.exec(cleanRange);
 		if (mSelfLine) return stats.range = {type: "line", distance: {type: getUnit(mSelfLine[2]), amount: Number(mSelfLine[1])}};
 
-		const mSelfCube = /^self \((\d+)-(foot|mile) cube\)$/i.exec(cleanRange);
+		const mSelfCube = /^self \((\d+)-(foot|ft\.?|mile|mi\.?) cube\)$/i.exec(cleanRange);
 		if (mSelfCube) return stats.range = {type: "cube", distance: {type: getUnit(mSelfCube[2]), amount: Number(mSelfCube[1])}};
 
-		const mSelfHemisphere = /^self \((\d+)-(foot|mile)-radius hemisphere\)$/i.exec(cleanRange);
+		const mSelfHemisphere = /^self \((\d+)-(foot|ft\.?|mile|mi\.?)(?:-radius)? hemisphere\)$/i.exec(cleanRange);
 		if (mSelfHemisphere) return stats.range = {type: "hemisphere", distance: {type: getUnit(mSelfHemisphere[2]), amount: Number(mSelfHemisphere[1])}};
 
 		// region Homebrew
-		const mPointCube = /^(?<point>\d+) (?<unit>feet|foot|miles?) \((\d+)-(foot|mile) cube\)$/i.exec(cleanRange);
+		const mPointCube = /^(?<point>\d+) (?<unit>feet|foot|ft\.?|miles?|mi\.?) \((\d+)-(foot|ft\.?|mile|mi\.?) cube\)$/i.exec(cleanRange);
 		if (mPointCube) return stats.range = {type: "point", distance: {type: getUnit(mPointCube.groups.unit), amount: Number(mPointCube.groups.point)}};
 		// endregion
 
@@ -323,6 +349,8 @@ class SpellParser extends BaseParser {
 		unit = unit.toLowerCase().trim();
 		switch (unit) {
 			case "days":
+			case "weeks":
+			case "months":
 			case "years":
 			case "hours":
 			case "minutes":
@@ -330,6 +358,8 @@ class SpellParser extends BaseParser {
 			case "rounds": return unit.slice(0, -1);
 
 			case "day":
+			case "week":
+			case "month":
 			case "year":
 			case "hour":
 			case "minute":
@@ -427,16 +457,16 @@ class SpellParser extends BaseParser {
 		if (dur.toLowerCase() === "special") return stats.duration = [{type: "special"}];
 		if (dur.toLowerCase() === "permanent") return stats.duration = [{type: "permanent"}];
 
-		const mConcOrUpTo = /^(concentration, )?up to (\d+|an?) (hour|minute|turn|round|week|day|year)(?:s)?$/i.exec(dur);
+		const mConcOrUpTo = /^(?<conc>concentration, )?up to (?<amount>\d+|an?) (?<unit>hour|minute|turn|round|week|month|day|year)(?:s)?$/i.exec(dur);
 		if (mConcOrUpTo) {
-			const amount = mConcOrUpTo[2].toLowerCase().startsWith("a") ? 1 : Number(mConcOrUpTo[2]);
-			const out = {type: "timed", duration: {type: this._getCleanTimeUnit(mConcOrUpTo[3], true, options), amount}, concentration: true};
-			if (mConcOrUpTo[1]) out.concentration = true;
-			else out.upTo = true;
+			const amount = mConcOrUpTo.groups.amount.toLowerCase().startsWith("a") ? 1 : Number(mConcOrUpTo.groups.amount);
+			const out = {type: "timed", duration: {type: this._getCleanTimeUnit(mConcOrUpTo.groups.unit, true, options), amount}};
+			if (mConcOrUpTo.groups.conc) out.concentration = true;
+			else out.duration.upTo = true;
 			return stats.duration = [out];
 		}
 
-		const mTimed = /^(\d+) (hour|minute|turn|round|week|day|year)(?:s)?$/i.exec(dur);
+		const mTimed = /^(\d+) (hour|minute|turn|round|week|month|day|year)(?:s)?$/i.exec(dur);
 		if (mTimed) return stats.duration = [{type: "timed", duration: {type: this._getCleanTimeUnit(mTimed[2], true, options), amount: Number(mTimed[1])}}];
 
 		const mDispelledTriggered = /^until dispelled( or triggered)?$/i.exec(dur);

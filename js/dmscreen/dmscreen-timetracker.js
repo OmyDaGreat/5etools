@@ -1,15 +1,29 @@
 import {PANEL_TYP_INITIATIVE_TRACKER} from "./dmscreen-consts.js";
 import {DmScreenUtil} from "./dmscreen-util.js";
+import {EncounterBuilderHelpers, ListUtilBestiary} from "../utils-list-bestiary.js";
 
-const _TIME_TRACKER_MOON_SPRITE = new Image();
-export const TIME_TRACKER_MOON_SPRITE_LOADER = new Promise(resolve => {
-	_TIME_TRACKER_MOON_SPRITE.onload = resolve;
-	_TIME_TRACKER_MOON_SPRITE.onerror = () => {
-		_TIME_TRACKER_MOON_SPRITE.hasError = true;
-		resolve();
-	};
-});
-_TIME_TRACKER_MOON_SPRITE.src = "img/dmscreen/moon.png";
+export class TimerTrackerMoonSpriteLoader {
+	static _TIME_TRACKER_MOON_SPRITE = new Image();
+	static _TIME_TRACKER_MOON_SPRITE_LOADER = null;
+	static _hasError = false;
+
+	static async pInit () {
+		this._TIME_TRACKER_MOON_SPRITE_LOADER ||= new Promise(resolve => {
+			this._TIME_TRACKER_MOON_SPRITE.onload = resolve;
+			this._TIME_TRACKER_MOON_SPRITE.onerror = () => {
+				this._hasError = true;
+				resolve();
+			};
+		});
+
+		this._TIME_TRACKER_MOON_SPRITE.src ||= Renderer.get().getMediaUrl("img", "dmscreen/moon.webp");
+
+		await this._TIME_TRACKER_MOON_SPRITE_LOADER;
+	}
+
+	static hasError () { return this._hasError; }
+	static getImage () { return this._TIME_TRACKER_MOON_SPRITE; }
+}
 
 export class TimeTracker {
 	static $getTracker (board, state) {
@@ -432,9 +446,9 @@ class TimeTrackerBase extends TimeTrackerComponent {
 		const ctx = c.getContext("2d");
 
 		// draw image
-		if (!_TIME_TRACKER_MOON_SPRITE.hasError) {
+		if (!TimerTrackerMoonSpriteLoader.hasError()) {
 			ctx.drawImage(
-				_TIME_TRACKER_MOON_SPRITE,
+				TimerTrackerMoonSpriteLoader.getImage(),
 				moonInfo.phaseIndex * TimeTrackerBase._MOON_RENDER_RES, // source x
 				0, // source y
 				TimeTrackerBase._MOON_RENDER_RES, // source w
@@ -829,7 +843,7 @@ class TimeTrackerRoot_Clock extends TimeTrackerComponent {
 			);
 		};
 
-		const $btnNextSunrise = $(`<button class="btn btn-xs btn-default mr-2" title="Skip time to the next sunrise. Skips to later today if it is currently night time, or to tomorrow otherwise.">Next Sunrise</button>`)
+		const $btnNextSunrise = $(`<button class="btn btn-xs btn-default" title="Skip time to the next sunrise. Skips to later today if it is currently night time, or to tomorrow otherwise.">Next Sunrise</button>`)
 			.click(() => {
 				const timeInfo = getTimeInfo({isBase: true});
 				const {
@@ -1132,7 +1146,7 @@ class TimeTrackerRoot_Clock extends TimeTrackerComponent {
 		this._parent.addHook("isAutoPaused", hookPaused);
 		hookPaused();
 
-		const $btnAddLongRest = $(`<button class="btn btn-xs btn-default mr-2" title="Add Long Rest (SHIFT for Subtract)">Long Rest</button>`)
+		const $btnAddLongRest = $(`<button class="btn btn-xs btn-default" title="Add Long Rest (SHIFT for Subtract)">Long Rest</button>`)
 			.click(evt => doModTime((evt.shiftKey ? -1 : 1) * this._parent.get("hoursPerLongRest") * this._parent.get("minutesPerHour") * this._parent.get("secondsPerMinute"), {isBase: true}));
 		const $btnAddShortRest = $(`<button class="btn btn-xs btn-default mr-2" title="Add Short Rest (SHIFT for Subtract)">Short Rest</button>`)
 			.click(evt => doModTime((evt.shiftKey ? -1 : 1) * this._parent.get("minutesPerShortRest") * this._parent.get("secondsPerMinute"), {isBase: true}));
@@ -1170,10 +1184,13 @@ class TimeTrackerRoot_Clock extends TimeTrackerComponent {
 				${$wrpDayNight}
 				<hr class="hr-3">
 				<div class="ve-flex-col">
-					<div class="ve-flex mb-2">
-						${$btnAddLongRest}${$btnAddShortRest}${$btnAddTurn}
+					<div class="ve-flex-v-center mb-2">
+						<div class="ve-flex-v-center btn-group">
+							${$btnAddLongRest}${$btnAddShortRest}
+						</div>
+						${$btnAddTurn}
 					</div>
-					<div class="ve-flex">
+					<div class="ve-flex-v-center btn-group">
 						${$btnNextSunrise}
 						${$btnNextDay}
 					</div>
@@ -2134,7 +2151,7 @@ class TimeTrackerRoot_Calendar extends TimeTrackerComponent {
 			exportedSublist.name = exportedSublist.name
 				|| await InputUiUtil.pGetUserString({
 					title: "Enter Encounter Name",
-					default: await EncounterBuilderSublistPlugin.pGetEncounterName(exportedSublist),
+					default: await EncounterBuilderHelpers.pGetEncounterName(exportedSublist),
 				})
 				|| "(Unnamed encounter)";
 
@@ -2637,7 +2654,6 @@ class TimeTrackerRoot_Calendar extends TimeTrackerComponent {
 		await saveManager.pMutStateFromStorage();
 
 		encounter = MiscUtil.copy(encounter);
-		await EncounterBuilderSublistPlugin.pMutLegacyData({exportedSublist: encounter.data});
 
 		if (
 			encounter.data.managerClient_isReferencable

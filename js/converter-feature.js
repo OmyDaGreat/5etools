@@ -52,6 +52,8 @@ class BaseParserFeature extends BaseParser {
 			parts.forEach(pt => {
 				pt = pt.trim();
 
+				if (/^the ability to cast at least one spell$/i.test(pt)) return pre.spellcasting = true;
+
 				if (/^spellcasting$/i.test(pt)) return pre.spellcasting2020 = true;
 				if (/^pact magic feature$/i.test(pt)) return pre.spellcasting2020 = true;
 
@@ -136,7 +138,15 @@ class BaseParserFeature extends BaseParser {
 		}
 		handleStack();
 
-		if (pres.length) state.entity.prerequisite = pres;
+		if (!pres.length) return;
+
+		const presDeduped = [];
+		pres.forEach(pre => {
+			if (presDeduped.some(it => CollectionUtil.deepEquals(pre, it))) return;
+			presDeduped.push(pre);
+		});
+
+		state.entity.prerequisite = presDeduped;
 	}
 }
 

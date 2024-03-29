@@ -1,7 +1,12 @@
-"use strict";
+import {EncounterBuilderCacheBestiaryPage} from "./bestiary/bestiary-encounterbuilder-cache.js";
+import {EncounterBuilderComponentBestiary} from "./bestiary/bestiary-encounterbuilder-component.js";
+import {EncounterBuilderUiBestiary} from "./bestiary/bestiary-encounterbuilder-ui.js";
+import {EncounterBuilderSublistPlugin} from "./bestiary/bestiary-encounterbuilder-sublistplugin.js";
 
-window.PROF_MODE_BONUS = "bonus";
-window.PROF_MODE_DICE = "dice";
+class _BestiaryConsts {
+	static PROF_MODE_BONUS = "bonus";
+	static PROF_MODE_DICE = "dice";
+}
 
 class _BestiaryUtil {
 	static getUrlSubhashes (mon, {isAddLeadingSep = true} = {}) {
@@ -52,11 +57,7 @@ class BestiarySublistManager extends SublistManager {
 
 	_onSublistChange () {
 		this._$dispCrTotal = this._$dispCrTotal || $(`#totalcr`);
-
-		const xp = this._encounterBuilder.calculateListEncounterXp();
-		const monCount = this.sublistItems.map(it => it.data.count).reduce((a, b) => a + b, 0);
-		this._$dispCrTotal.html(`${monCount} creature${monCount === 1 ? "" : "s"}; ${xp.baseXp.toLocaleString()} XP (<span class="help" title="Adjusted Encounter XP">Enc</span>: ${(xp.adjustedXp).toLocaleString()} XP)`);
-		if (this._encounterBuilder.isActive()) this._encounterBuilder.updateDifficulty();
+		this._encounterBuilder.onSublistChange({$dispCrTotal: this._$dispCrTotal});
 	}
 
 	_getSublistFullHash ({entity}) {
@@ -67,22 +68,22 @@ class BestiarySublistManager extends SublistManager {
 		return [
 			new SublistCellTemplate({
 				name: "Name",
-				css: "bold col-5 pl-0",
+				css: "bold ve-col-5 pl-0",
 				colStyle: "",
 			}),
 			new SublistCellTemplate({
 				name: "Type",
-				css: "col-3-8",
+				css: "ve-col-3-8",
 				colStyle: "",
 			}),
 			new SublistCellTemplate({
 				name: "CR",
-				css: "col-1-2 ve-text-center",
+				css: "ve-col-1-2 ve-text-center",
 				colStyle: "text-center",
 			}),
 			new SublistCellTemplate({
 				name: "Number",
-				css: "col-2 ve-text-center",
+				css: "ve-col-2 ve-text-center",
 				colStyle: "text-center",
 			}),
 		];
@@ -97,7 +98,7 @@ class BestiarySublistManager extends SublistManager {
 
 		const cellsText = [name, type, cr];
 
-		const $hovStatblock = $(`<span class="col-1-4 help help--hover ecgen__visible">Stat Block</span>`)
+		const $hovStatblock = $(`<span class="ve-col-1-4 help help--hover best-ecgen__visible">Stat Block</span>`)
 			.mouseover(evt => this._encounterBuilder.doStatblockMouseOver({
 				evt,
 				ele: $hovStatblock[0],
@@ -108,27 +109,27 @@ class BestiarySublistManager extends SublistManager {
 			.mousemove(evt => Renderer.hover.handleLinkMouseMove(evt, $hovStatblock[0]))
 			.mouseleave(evt => Renderer.hover.handleLinkMouseLeave(evt, $hovStatblock[0]));
 
-		const hovTokenMeta = EncounterBuilder.getTokenHoverMeta(mon);
-		const $hovToken = !hovTokenMeta ? $(`<span class="col-1-2 ecgen__visible"></span>`) : $(`<span class="col-1-2 ecgen__visible help help--hover">Token</span>`)
+		const hovTokenMeta = EncounterBuilderUiBestiary.getTokenHoverMeta(mon);
+		const $hovToken = !hovTokenMeta ? $(`<span class="ve-col-1-2 best-ecgen__visible"></span>`) : $(`<span class="ve-col-1-2 best-ecgen__visible help help--hover">Token</span>`)
 			.mouseover(evt => hovTokenMeta.mouseOver(evt, $hovToken[0]))
 			.mousemove(evt => hovTokenMeta.mouseMove(evt, $hovToken[0]))
 			.mouseleave(evt => hovTokenMeta.mouseLeave(evt, $hovToken[0]));
 
-		const $hovImage = $(`<span class="col-1-2 ecgen__visible help help--hover">Image</span>`);
+		const $hovImage = $(`<span class="ve-col-1-2 best-ecgen__visible help help--hover">Image</span>`);
 		Renderer.monster.hover.bindFluffImageMouseover({mon, $ele: $hovImage});
 
 		const $ptCr = (() => {
-			if (!ScaleCreature.isCrInScaleRange(mon)) return $(`<span class="col-1-2 ve-text-center">${cr}</span>`);
+			if (!ScaleCreature.isCrInScaleRange(mon)) return $(`<span class="ve-col-1-2 ve-text-center">${cr}</span>`);
 
 			const $iptCr = $(`<input value="${cr}" class="w-100 ve-text-center form-control form-control--minimal input-xs">`)
 				.click(() => $iptCr.select())
 				.change(() => this._encounterBuilder.pDoCrChange($iptCr, mon, mon._scaledCr));
 
-			return $$`<span class="col-1-2 ve-text-center">${$iptCr}</span>`;
+			return $$`<span class="ve-col-1-2 ve-text-center">${$iptCr}</span>`;
 		})();
 
-		const $eleCount1 = $(`<span class="col-2 ve-text-center">${count}</span>`);
-		const $eleCount2 = $(`<span class="col-2 pr-0 ve-text-center">${count}</span>`);
+		const $eleCount1 = $(`<span class="ve-col-2 ve-text-center">${count}</span>`);
+		const $eleCount2 = $(`<span class="ve-col-2 pr-0 ve-text-center">${count}</span>`);
 
 		const listItem = new ListItem(
 			hash,
@@ -144,8 +145,6 @@ class BestiarySublistManager extends SublistManager {
 			{
 				count,
 				customHashId,
-				approxHp: this._getApproxHp(mon),
-				approxAc: this._getApproxAc(mon),
 				isLocked,
 				$elesCount: [$eleCount1, $eleCount2],
 				fnsUpdate: [],
@@ -162,14 +161,14 @@ class BestiarySublistManager extends SublistManager {
 		listItem.data.fnsUpdate.push(sublistButtonsMeta.fnUpdate);
 
 		listItem.ele = $$`<div class="lst__row lst__row--sublist ve-flex-col lst__row--bestiary-sublist">
-			<a href="#${hash}" draggable="false" class="ecgen__hidden lst--border lst__row-inner">
+			<a href="#${hash}" draggable="false" class="best-ecgen__hidden lst--border lst__row-inner">
 				${this.constructor._getRowCellsHtml({values: cellsText, templates: this.constructor._ROW_TEMPLATE.slice(0, 3)})}
 				${$eleCount1}
 			</a>
 
-			<div class="lst__wrp-cells ecgen__visible--flex lst--border lst__row-inner">
+			<div class="lst__wrp-cells best-ecgen__visible--flex lst--border lst__row-inner">
 				${sublistButtonsMeta.$wrp}
-				<span class="ecgen__name--sub col-3-5">${name}</span>
+				<span class="best-ecgen__name--sub ve-col-3-5">${name}</span>
 				${$hovStatblock}
 				${$hovToken}
 				${$hovImage}
@@ -181,20 +180,6 @@ class BestiarySublistManager extends SublistManager {
 			.click(evt => this._handleBestiaryLinkClickSub(evt, listItem));
 
 		return listItem;
-	}
-
-	_getApproxHp (mon) {
-		if (mon.hp && mon.hp.average && !isNaN(mon.hp.average)) return Number(mon.hp.average);
-		return null;
-	}
-
-	_getApproxAc (mon) {
-		// Use the first AC listed, as this is usually the "primary"
-		if (mon.ac && mon.ac[0] != null) {
-			if (mon.ac[0].ac) return mon.ac[0].ac;
-			if (typeof mon.ac[0] === "number") return mon.ac[0];
-		}
-		return null;
 	}
 
 	_handleBestiaryLinkClickSub (evt, listItem) {
@@ -388,7 +373,7 @@ class BestiaryPage extends ListPageMultiSource {
 		this._$wrpBtnProf = null;
 		this._$btnProf = null;
 
-		this._profDicMode = PROF_MODE_BONUS;
+		this._profDicMode = _BestiaryConsts.PROF_MODE_BONUS;
 
 		this._encounterBuilder = null;
 
@@ -445,12 +430,12 @@ class BestiaryPage extends ListPageMultiSource {
 					click: evt => this._handleBestiaryLinkClick(evt),
 					children: [
 						this._encounterBuilder.getButtons(mI),
-						e_({tag: "span", clazz: `ecgen__name bold col-4-2 pl-0`, text: mon.name}),
-						e_({tag: "span", clazz: `col-4-1`, text: type}),
-						e_({tag: "span", clazz: `col-1-7 ve-text-center`, text: cr}),
+						e_({tag: "span", clazz: `best-ecgen__name bold ve-col-4-2 pl-0`, text: mon.name}),
+						e_({tag: "span", clazz: `ve-col-4-1`, text: type}),
+						e_({tag: "span", clazz: `ve-col-1-7 ve-text-center`, text: cr}),
 						e_({
 							tag: "span",
-							clazz: `col-2 ve-text-center ${Parser.sourceJsonToColor(mon.source)} pr-0`,
+							clazz: `ve-col-2 ve-text-center ${Parser.sourceJsonToColor(mon.source)} pr-0`,
 							style: Parser.sourceJsonToStylePart(mon.source),
 							title: `${Parser.sourceJsonToFull(mon.source)}${Renderer.utils.getSourceSubText(mon)}`,
 							text: source,
@@ -537,16 +522,20 @@ class BestiaryPage extends ListPageMultiSource {
 		this._pPageInit_profBonusDiceToggle();
 	}
 
+	_pOnLoad_pPostLoad () {
+		this._encounterBuilder.render();
+	}
+
 	_pPageInit_profBonusDiceToggle () {
 		const $btnProfBonusDice = $("button#profbonusdice");
 
 		$btnProfBonusDice.click(() => {
-			if (this._profDicMode === PROF_MODE_DICE) {
-				this._profDicMode = PROF_MODE_BONUS;
+			if (this._profDicMode === _BestiaryConsts.PROF_MODE_DICE) {
+				this._profDicMode = _BestiaryConsts.PROF_MODE_BONUS;
 				$btnProfBonusDice.html("Use Proficiency Dice");
 				this._$pgContent.attr("data-proficiency-dice-mode", this._profDicMode);
 			} else {
-				this._profDicMode = PROF_MODE_DICE;
+				this._profDicMode = _BestiaryConsts.PROF_MODE_DICE;
 				$btnProfBonusDice.html("Use Proficiency Bonus");
 				this._$pgContent.attr("data-proficiency-dice-mode", this._profDicMode);
 			}
@@ -571,7 +560,7 @@ class BestiaryPage extends ListPageMultiSource {
 
 		this._$pgContent
 			.on(`mousedown`, `[data-roll-prof-type]`, evt => {
-				if (this._profDicMode !== PROF_MODE_BONUS) evt.preventDefault();
+				if (this._profDicMode !== _BestiaryConsts.PROF_MODE_BONUS) evt.preventDefault();
 			})
 			.on(`click`, `[data-roll-prof-type]`, evt => {
 				const parent = evt.currentTarget.closest(`[data-roll-prof-type]`);
@@ -581,7 +570,7 @@ class BestiaryPage extends ListPageMultiSource {
 
 				switch (type) {
 					case "d20": {
-						if (this._profDicMode === PROF_MODE_BONUS) return;
+						if (this._profDicMode === _BestiaryConsts.PROF_MODE_BONUS) return;
 
 						evt.stopPropagation();
 						evt.preventDefault();
@@ -595,7 +584,7 @@ class BestiaryPage extends ListPageMultiSource {
 					}
 
 					case "dc": {
-						if (this._profDicMode === PROF_MODE_BONUS) {
+						if (this._profDicMode === _BestiaryConsts.PROF_MODE_BONUS) {
 							evt.stopPropagation();
 							evt.preventDefault();
 							return;
@@ -742,7 +731,7 @@ class BestiaryPage extends ListPageMultiSource {
 		// region dice rollers
 		const expectedPB = Parser.crToPb(mon.cr);
 
-		const pluginDc = (tag, text) => {
+		const pluginDc = (commonArgs, {input: {tag, text}}) => {
 			if (isNaN(text) || expectedPB <= 0) return null;
 
 			const withoutPB = Number(text) - expectedPB;
@@ -751,7 +740,7 @@ class BestiaryPage extends ListPageMultiSource {
 			return `DC <span class="rd__dc rd__dc--rollable" data-roll-prof-type="dc" data-roll-prof-dice="${profDiceString.qq()}"><span class="rd__dc--rollable-text">${text}</span><span class="rd__dc--rollable-dice">${profDiceString}</span></span>`;
 		};
 
-		const pluginDice = (entry, textStack, meta, options) => {
+		const pluginDice = (commonArgs, {input: entry}) => {
 			if (expectedPB <= 0 || entry.subType !== "d20" || entry.context?.type == null) return null;
 
 			const text = Renderer.getEntryDiceDisplayText(entry);
@@ -780,8 +769,7 @@ class BestiaryPage extends ListPageMultiSource {
 
 				// add proficiency dice stuff for attack rolls, since those _generally_ have proficiency
 				// this is not 100% accurate; for example, ghouls don't get their prof bonus on bite attacks
-				// fixing it would probably involve machine learning though; we need an AI to figure it out on-the-fly
-				// (Siri integration forthcoming)
+				// fixing this would require additional context, which is not (yet) available in the renderer
 				case "hit": break;
 
 				case "abilityCheck": return null;
@@ -833,11 +821,10 @@ class BestiaryPage extends ListPageMultiSource {
 
 		const $floatToken = this._$dispToken.empty();
 
-		const hasToken = mon.tokenUrl || mon.hasToken;
-		if (!hasToken) return;
+		if (!Renderer.monster.hasToken(mon)) return;
 
 		const imgLink = Renderer.monster.getTokenUrl(mon);
-		const $img = $(`<img src="${imgLink}" class="mon__token" alt="Token Image: ${(mon.name || "").qq()}" loading="lazy">`);
+		const $img = $(`<img src="${imgLink}" class="mon__token" alt="Token Image: ${(mon.name || "").qq()}" ${mon.tokenCredit ? `title="Credit: ${mon.tokenCredit.qq()}"` : ""} loading="lazy">`);
 		$tokenImages.push($img);
 		const $lnkToken = $$`<a href="${imgLink}" class="mon__wrp-token" target="_blank" rel="noopener noreferrer">${$img}</a>`
 			.appendTo($floatToken);
@@ -856,8 +843,9 @@ class BestiaryPage extends ListPageMultiSource {
 
 			const buildEle = (meta) => {
 				if (!meta.$ele) {
-					const imgLink = Renderer.monster.getTokenUrl({name: meta.name, source: meta.source, tokenUrl: meta.tokenUrl});
-					const $img = $(`<img src="${imgLink}" class="mon__token" alt="Token Image: ${(meta.displayName || meta.name || "").qq()}" loading="lazy">`)
+					const imgLink = Renderer.monster.getTokenUrl(meta);
+					const displayName = Renderer.monster.getAltArtDisplayName(meta);
+					const $img = $(`<img src="${imgLink}" class="mon__token" alt="Token Image${displayName ? `: ${displayName.qq()}` : ""}}" ${meta.tokenCredit ? `title="Credit: ${meta.tokenCredit.qq()}"` : ""} loading="lazy">`)
 						.on("error", () => {
 							$img.attr(
 								"src",
@@ -909,8 +897,7 @@ class BestiaryPage extends ListPageMultiSource {
 				meta.$ele.show();
 				setTimeout(() => meta.$ele.css("max-width", ""), 10); // hack to clear the earlier 100% width
 
-				if (meta.name && meta.source) $footer.html(Renderer.monster.getRenderedAltArtEntry(meta));
-				else $footer.html("");
+				$footer.html(Renderer.monster.getRenderedAltArtEntry(meta));
 
 				$wrpFooter.detach().appendTo(meta.$ele);
 				$btnLeft.detach().appendTo(meta.$ele);
@@ -970,8 +957,23 @@ class BestiaryPage extends ListPageMultiSource {
 }
 
 const bestiaryPage = new BestiaryPage();
-const encounterBuilder = new EncounterBuilder();
+window.bestiaryPage = bestiaryPage;
 const sublistManager = new BestiarySublistManager();
+
+const encounterBuilderCache = new EncounterBuilderCacheBestiaryPage({bestiaryPage});
+const encounterBuilderComp = new EncounterBuilderComponentBestiary();
+const encounterBuilder = new EncounterBuilderUiBestiary({
+	cache: encounterBuilderCache,
+	comp: encounterBuilderComp,
+	bestiaryPage,
+	sublistManager,
+});
+const sublistPlugin = new EncounterBuilderSublistPlugin({
+	sublistManager,
+	encounterBuilder,
+	encounterBuilderComp,
+});
+sublistManager.addPlugin(sublistPlugin);
 
 bestiaryPage.encounterBuilder = encounterBuilder;
 bestiaryPage.sublistManager = sublistManager;

@@ -111,7 +111,7 @@ class PageFilterRaces extends PageFilter {
 		});
 		this._miscFilter = new Filter({
 			header: "Miscellaneous",
-			items: ["Base Race", "Key Race", "Lineage", "Modified Copy", "Reprinted", "SRD", "Basic Rules", "Has Images", "Has Info"],
+			items: ["Base Race", "Key Race", "Lineage", "Modified Copy", "Reprinted", "SRD", "Basic Rules", "Legacy", "Has Images", "Has Info"],
 			isMiscFilter: true,
 			// N.b. "Reprinted" is not red by default, as we assume tastes vary w.r.t. ability score style
 		});
@@ -141,8 +141,9 @@ class PageFilterRaces extends PageFilter {
 		if (r._isCopy) r._fMisc.push("Modified Copy");
 		if (r.srd) r._fMisc.push("SRD");
 		if (r.basicRules) r._fMisc.push("Basic Rules");
-		if (r.hasFluff || r.fluff?.entries) r._fMisc.push("Has Info");
-		if (r.hasFluffImages || r.fluff?.images) r._fMisc.push("Has Images");
+		if (SourceUtil.isLegacySourceWotc(r.source)) r._fMisc.push("Legacy");
+		if (this._hasFluff(r)) r._fMisc.push("Has Info");
+		if (this._hasFluffImages(r)) r._fMisc.push("Has Images");
 		if (r.lineage) r._fMisc.push("Lineage");
 		if (this._isReprinted({reprintedAs: r.reprintedAs, tag: "race", prop: "race", page: UrlUtil.PG_RACES})) r._fMisc.push("Reprinted");
 
@@ -276,16 +277,16 @@ class ModalFilterRaces extends ModalFilter {
 		const source = Parser.sourceJsonToAbv(race.source);
 
 		eleRow.innerHTML = `<div class="w-100 ve-flex-vh-center lst--border veapp__list-row no-select lst__wrp-cells">
-			<div class="col-0-5 pl-0 ve-flex-vh-center">${this._isRadio ? `<input type="radio" name="radio" class="no-events">` : `<input type="checkbox" class="no-events">`}</div>
+			<div class="ve-col-0-5 pl-0 ve-flex-vh-center">${this._isRadio ? `<input type="radio" name="radio" class="no-events">` : `<input type="checkbox" class="no-events">`}</div>
 
-			<div class="col-0-5 px-1 ve-flex-vh-center">
+			<div class="ve-col-0-5 px-1 ve-flex-vh-center">
 				<div class="ui-list__btn-inline px-2" title="Toggle Preview (SHIFT to Toggle Info Preview)">[+]</div>
 			</div>
 
-			<div class="col-4 ${race._versionBase_isVersion ? "italic" : ""} ${this._getNameStyle()}">${race._versionBase_isVersion ? `<span class="px-3"></span>` : ""}${race.name}</div>
-			<div class="col-4">${ability.asTextShort}</div>
-			<div class="col-2 ve-text-center">${size}</div>
-			<div class="col-1 pr-0 ve-text-center ${Parser.sourceJsonToColor(race.source)}" title="${Parser.sourceJsonToFull(race.source)}" ${Parser.sourceJsonToStyle(race.source)}>${source}</div>
+			<div class="ve-col-4 ${race._versionBase_isVersion ? "italic" : ""} ${this._getNameStyle()}">${race._versionBase_isVersion ? `<span class="px-3"></span>` : ""}${race.name}</div>
+			<div class="ve-col-4">${ability.asTextShort}</div>
+			<div class="ve-col-2 ve-text-center">${size}</div>
+			<div class="ve-col-1 pr-0 ve-flex-h-center ${Parser.sourceJsonToColor(race.source)}" title="${Parser.sourceJsonToFull(race.source)}" ${Parser.sourceJsonToStyle(race.source)}>${source}${Parser.sourceJsonToMarkerHtml(race.source)}</div>
 		</div>`;
 
 		const btnShowHidePreview = eleRow.firstElementChild.children[1].firstElementChild;
